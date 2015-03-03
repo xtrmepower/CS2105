@@ -3,15 +3,20 @@
 import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.zip.CRC32;
 
 class FileReceiver {
 
-    public DatagramSocket socket;
-    public DatagramPacket pkt;
+    public DatagramSocket _socket;
+    public DatagramPacket _packet;
+    public CRC32 _checksum;
 
     private final static int PACKET_SIZE = 1000;
-    private final static int MAX_FILENAME_LENGTH = 100;
-    private final static int FILESIZE_BYTE_LENGTH = 16;
+    private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
+    private final static int FILESIZE_BYTE_LENGTH = 8;  // size of long
+    private final static int PAYLOAD_BYTE_LENGTH = 8;   // size of long
+    private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
+
 
     public static void main(String[] args) {
 
@@ -37,7 +42,6 @@ class FileReceiver {
         bb.get(tempFilename, 0, MAX_FILENAME_LENGTH);
 
         filename = new String(tempFilename);
-
         filename = filename.trim();
 
         return filename;
@@ -47,7 +51,7 @@ class FileReceiver {
         int serverPort = Integer.parseInt(localPort);
 
         try {
-            socket = new DatagramSocket(serverPort);
+            _socket = new DatagramSocket(serverPort);
         } catch (SocketException e) {
             System.out.println(e.toString());
         }
@@ -68,16 +72,14 @@ class FileReceiver {
 
         try {
             while (!isFileTransferDone) {
-                pkt = new DatagramPacket(rcvBuffer, rcvBuffer.length);
+                _packet = new DatagramPacket(rcvBuffer, rcvBuffer.length);
 
                 try {
-                    socket.receive(pkt);
-                    buffer = ByteBuffer.wrap(pkt.getData());
+                    _socket.receive(_packet);
+                    buffer = ByteBuffer.wrap(_packet.getData());
                     buffer.clear();
 
-                    // extract target filesize.
-                    totalFileSize = buffer.getLong();
-                    fileDataSize = buffer.getLong();
+                    //TODO: checksum check here
 
                     // extract file name.
                     filename = extractFileName(buffer);
@@ -90,7 +92,15 @@ class FileReceiver {
                         }
                     }
 
-                    bos.write(rcvBuffer, MAX_FILENAME_LENGTH+FILESIZE_BYTE_LENGTH, (int)fileDataSize);
+                    // extract target filesize.
+                    totalFileSize = buffer.getLong();
+                    fileDataSize = buffer.getLong();
+
+                    bos.write(rcvBuffer, MAX_FILENAME_LENGTH +
+                                        FILESIZE_BYTE_LENGTH +
+                                        PAYLOAD_BYTE_LENGTH,
+                                        (int)fileDataSize);
+
                     currFileSize += fileDataSize;
                     System.out.println(currFileSize + "/" + totalFileSize + "(" + (float)(((float)currFileSize/(float)totalFileSize)*100.0f) + "%)");
 

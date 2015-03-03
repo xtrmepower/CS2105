@@ -3,16 +3,20 @@
 import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.zip.CRC32;
 
 class FileSender {
 
     public DatagramSocket _socket;
     public DatagramPacket _packet;
     public InetAddress _serverAddress;
+    public CRC32 _checksum;
 
     private final static int PACKET_SIZE = 1000;
-    private final static int MAX_FILENAME_LENGTH = 100;
-    private final static int FILESIZE_BYTE_LENGTH = 16;
+    private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
+    private final static int FILESIZE_BYTE_LENGTH = 8;  // size of long
+    private final static int PAYLOAD_BYTE_LENGTH = 8;   // size of long
+    private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
 
     private final static String HOSTNAME = "localhost";
 
@@ -59,6 +63,7 @@ class FileSender {
         long fileSize = 0;
         byte[] fileDataBuffer = new byte[PACKET_SIZE -
                                       FILESIZE_BYTE_LENGTH -
+                                      PAYLOAD_BYTE_LENGTH -
                                       MAX_FILENAME_LENGTH];
         byte[] tempPktBuffer = new byte[PACKET_SIZE];
 
@@ -81,13 +86,16 @@ class FileSender {
             numBytes = bis.read(fileDataBuffer);
 
             while (numBytes > 0) {
-                pktBuffer.putLong(fileSize);
-                pktBuffer.putLong(numBytes);
-                pktBuffer.put(parseRcvFileName(rcvFileName));
-                pktBuffer.put(fileDataBuffer);
+                pktBuffer.put(parseRcvFileName(rcvFileName));   // received file name
+                pktBuffer.putLong(fileSize);    // total file size
+                pktBuffer.putLong(numBytes);    // payload size (amt of file data)
+                pktBuffer.put(fileDataBuffer);  // actual payload data
 
                 // Create a new packet with the data in the buffer.
                 _packet = new DatagramPacket(pktBuffer.array(), PACKET_SIZE, _serverAddress, serverPort);
+
+                // TODO: create a checksum here
+                //_checksum.update(pktBuffer.array());
 
                 // Send the packet via the client side's socket.
                 _socket.send(_packet);
@@ -95,11 +103,12 @@ class FileSender {
                 // Continue reading the file for more data.
                 fileDataBuffer = new byte[PACKET_SIZE -
                                         FILESIZE_BYTE_LENGTH -
+                                        PAYLOAD_BYTE_LENGTH -
                                         MAX_FILENAME_LENGTH];
                 numBytes = bis.read(fileDataBuffer);
 
                 try {
-                    Thread.sleep(10);
+                    Thread.sleep(1);
                 } catch (InterruptedException e) {
                     System.out.println(e.toString());
                 }
