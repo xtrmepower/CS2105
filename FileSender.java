@@ -15,6 +15,8 @@ class FileSender {
     private BufferedInputStream _bis;
     private int _totalFileSize;
     private int _payloadSize;
+    private ByteBuffer _packetBuffer;
+    private ByteBuffer _tempBuffer;
 
     private final static int PACKET_SIZE = 1000;
     private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
@@ -36,16 +38,16 @@ class FileSender {
         new FileSender(args[0], HOSTNAME, args[1], args[2]);
     }
 
-    private byte[] parseRcvFileName(String rcvFileName) {
-        // Pad the file name with spaces till 100 characters.
+    // Pad the filename with spaces until 100 characters.
+    private byte[] padFileName(String rcvFileName) {
         String paddedName = String.format("%-100s", rcvFileName);
 
         return paddedName.getBytes();
     }
 
-    private void flushByteBuffer(ByteBuffer bb) {
+    private void flushByteBuffer(ByteBuffer bb, int bbsize) {
         bb.clear();
-        bb.put(new byte[PACKET_SIZE]);
+        bb.put(new byte[bbsize]);
         bb.clear();
     }
 
@@ -55,6 +57,14 @@ class FileSender {
         checksum.update(data);
 
         return checksum.getValue();
+    }
+
+    private void appendPacketBuffer(ByteBuffer buffer, long data) {
+        buffer.putLong(data);
+    }
+
+    private void appendPacketBuffer(ByteBuffer buffer, byte[] data) {
+        buffer.put(data);
     }
 
     public FileSender(String fileToOpen, String host, String port, String rcvFileName) {
@@ -77,7 +87,8 @@ class FileSender {
                                       PAYLOAD_FILESIZE_BYTE_LENGTH -
                                       CHECKSUM_BYTE_LENGTH -
                                       MAX_FILENAME_LENGTH];
-        byte[] tempPktBuffer = new byte[PACKET_SIZE];
+        _tempBuffer = ByteBuffer.wrap(new byte[PACKET_SIZE-CHECKSUM_BYTE_LENGTH]);
+        _packetBuffer = ByteBuffer.wrap(new byte[PACKET_SIZE]);
 
         try {
             _fis = new FileInputStream(fileToOpen);
@@ -90,24 +101,28 @@ class FileSender {
             System.out.println(e.toString());
         }
 
-        ByteBuffer pktBuffer = ByteBuffer.wrap(tempPktBuffer);
-
         // Send the actual file itself.
         _bis = new BufferedInputStream(_fis);
         try {
             _payloadSize = _bis.read(fileDataBuffer);
 
             while (_payloadSize > 0) {
-                pktBuffer.put(parseRcvFileName(rcvFileName));   // received file name
-                pktBuffer.putLong(_totalFileSize);    // total file size
-                pktBuffer.putLong(_payloadSize);    // payload size (amt of file data)
-                pktBuffer.put(fileDataBuffer);  // actual payload data
+                //appendPacketBuffer(_packetBpadFileName(rcvFileName));
+                //appendPacketBuffer(_totalFileSize);
+                //appendPacketBuffer(_payloadSize);
+                _tempBuffer.put(padFileName(rcvFileName));   // received file name
+                _tempBuffer.putLong(_totalFileSize);    // total file size
+                _tempBuffer.putLong(_payloadSize);    // payload size (amt of file data)
+                _tempBuffer.put(fileDataBuffer);  // actual payload data
 
                 // Perform checksum on the data and put it into the packet buffer.
-                pktBuffer.putLong(getChecksum(pktBuffer.array()));
+                long checksum = getChecksum(_tempBuffer.array());
+                System.out.println("checksum="+checksum);
+                _packetBuffer.putLong(checksum);
+                _packetBuffer.put(_tempBuffer.array());
 
                 // Create a new packet with the data in the buffer.
-                _packet = new DatagramPacket(pktBuffer.array(), PACKET_SIZE, _serverAddress, _serverPort);
+                _packet = new DatagramPacket(_packetBuffer.array(), PACKET_SIZE, _serverAddress, _serverPort);
 
                 // Send the packet via the client side's socket.
                 _socket.send(_packet);
@@ -126,7 +141,8 @@ class FileSender {
                     System.out.println(e.toString());
                 }
 
-                flushByteBuffer(pktBuffer);
+                flushByteBuffer(_packetBuffer, PACKET_SIZE);
+                flushByteBuffer(_tempBuffer, PACKET_SIZE-CHECKSUM_BYTE_LENGTH);
             }
         } catch (IOException e) {
             System.out.println(e.toString());

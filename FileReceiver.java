@@ -81,6 +81,8 @@ class FileReceiver {
                     buffer.clear();
 
                     //TODO: checksum check here
+                    rcvChecksum = buffer.getLong();
+                    System.out.println("checksum="+rcvChecksum);
 
                     // extract file name.
                     filename = extractFileName(buffer);
@@ -97,14 +99,15 @@ class FileReceiver {
                     totalFileSize = buffer.getLong();
                     fileDataSize = buffer.getLong();
 
-                    bos.write(rcvBuffer, MAX_FILENAME_LENGTH +
+                    /*bos.write(rcvBuffer, MAX_FILENAME_LENGTH +
                                         TOTAL_FILESIZE_BYTE_LENGTH +
                                         PAYLOAD_FILESIZE_BYTE_LENGTH,
-                                        (int)fileDataSize);
+                                        (int)fileDataSize);*/
 
-                    // Extract checksum
-                    rcvChecksum = buffer.getLong();
-                    System.out.println("checksum="+rcvChecksum);
+                    byte[] fileDataBuffer = new byte[(int)fileDataSize];
+                    buffer.get(fileDataBuffer);
+
+                    bos.write(fileDataBuffer);
 
                     currFileSize += fileDataSize;
                     System.out.println(currFileSize + "/" + totalFileSize + "(" + (float)(((float)currFileSize/(float)totalFileSize)*100.0f) + "%)");
