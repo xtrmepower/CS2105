@@ -13,8 +13,8 @@ class FileReceiver {
 
     private final static int PACKET_SIZE = 1000;
     private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
-    private final static int FILESIZE_BYTE_LENGTH = 8;  // size of long
-    private final static int PAYLOAD_BYTE_LENGTH = 8;   // size of long
+    private final static int TOTAL_FILESIZE_BYTE_LENGTH = 8;  // size of long
+    private final static int PAYLOAD_FILESIZE_BYTE_LENGTH = 8;   // size of long
     private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
 
 
@@ -67,6 +67,7 @@ class FileReceiver {
         long totalFileSize = 0;
         long currFileSize = 0;
         long fileDataSize = 0;
+        long rcvChecksum = 0;
         String filename = "";
         ByteBuffer buffer;
 
@@ -97,9 +98,13 @@ class FileReceiver {
                     fileDataSize = buffer.getLong();
 
                     bos.write(rcvBuffer, MAX_FILENAME_LENGTH +
-                                        FILESIZE_BYTE_LENGTH +
-                                        PAYLOAD_BYTE_LENGTH,
+                                        TOTAL_FILESIZE_BYTE_LENGTH +
+                                        PAYLOAD_FILESIZE_BYTE_LENGTH,
                                         (int)fileDataSize);
+
+                    // Extract checksum
+                    rcvChecksum = buffer.getLong();
+                    System.out.println("checksum="+rcvChecksum);
 
                     currFileSize += fileDataSize;
                     System.out.println(currFileSize + "/" + totalFileSize + "(" + (float)(((float)currFileSize/(float)totalFileSize)*100.0f) + "%)");
