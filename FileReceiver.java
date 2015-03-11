@@ -7,16 +7,26 @@ import java.util.zip.CRC32;
 
 class FileReceiver {
 
-    public DatagramSocket _socket;
-    public DatagramPacket _packet;
-    public CRC32 _checksum;
-
     private final static int PACKET_SIZE = 1000;
     private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
     private final static int TOTAL_FILESIZE_BYTE_LENGTH = 8;  // size of long
     private final static int PAYLOAD_FILESIZE_BYTE_LENGTH = 8;   // size of long
     private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
 
+    private DatagramSocket _socket;
+    private DatagramPacket _packet;
+    private boolean _isFileTransferDone = false;
+    private long _totalFileSize = 0;
+    private long _currFileSize = 0;
+    private long _payloadSize = 0;
+    private long _rcvChecksum = 0;
+    private String _filename = "";
+    private FileOutputStream _fos = null;
+    private BufferedOutputStream _bos = null;
+    private byte[] _rcvBufferArray;
+    private byte[] _payloadBufferArray;
+    private ByteBuffer _packetBuffer;
+    private ByteBuffer _tempBuffer;
 
     public static void main(String[] args) {
 
@@ -66,6 +76,12 @@ class FileReceiver {
         return false;
     }
 
+    private void printCompletionPercentage(float current, float total) {
+        float percent = (current/total)*100.0f;
+
+        System.out.println(current + "/" + total + "(" + percent + "%)");
+    }
+
     public FileReceiver(String localPort) {
         int serverPort = Integer.parseInt(localPort);
 
@@ -75,72 +91,56 @@ class FileReceiver {
             System.out.println(e.toString());
         }
 
-        byte[] rcvBuffer = new byte[1000];
-
-        StringBuffer temp = new StringBuffer();
-
-        FileOutputStream fos = null;
-        BufferedOutputStream bos = null;
-
-        boolean isFileTransferDone = false;
-        long totalFileSize = 0;
-        long currFileSize = 0;
-        long fileDataSize = 0;
-        long rcvChecksum = 0;
-        String filename = "";
-        ByteBuffer buffer;
-        ByteBuffer hello;
+        _rcvBufferArray = new byte[PACKET_SIZE];
 
         try {
-            while (!isFileTransferDone) {
-                _packet = new DatagramPacket(rcvBuffer, rcvBuffer.length);
+            while (!_isFileTransferDone) {
+                _packet = new DatagramPacket(_rcvBufferArray, _rcvBufferArray.length);
 
                 try {
                     _socket.receive(_packet);
-                    buffer = ByteBuffer.wrap(_packet.getData());
-                    buffer.clear();
+                    _packetBuffer = ByteBuffer.wrap(_packet.getData());
+                    _packetBuffer.clear();
 
-                    //TODO: checksum check here
-                    rcvChecksum = buffer.getLong();
-                    System.out.println("checksum="+rcvChecksum);
+                    _rcvChecksum = _packetBuffer.getLong();
 
                     // extract file name.
-                    filename = extractFileName(buffer);
-                    if (fos == null) {
+                    _filename = extractFileName(_packetBuffer);
+                    if (_fos == null) {
                         try {
-                            fos = new FileOutputStream(filename);
-                            bos = new BufferedOutputStream(fos);
+                            _fos = new FileOutputStream(_filename);
+                            _bos = new BufferedOutputStream(_fos);
                         } catch (FileNotFoundException e) {
                             System.out.println(e.toString());
                         }
                     }
 
                     // extract target filesize.
-                    totalFileSize = buffer.getLong();
-                    fileDataSize = buffer.getLong();
+                    _totalFileSize = _packetBuffer.getLong();
+                    _payloadSize = _packetBuffer.getLong();
 
-                    byte[] fileDataBuffer = new byte[(int)fileDataSize];
-                    buffer.get(fileDataBuffer);
+                    _payloadBufferArray = new byte[(int)_payloadSize];
+                    _packetBuffer.get(_payloadBufferArray);
 
                     // perform checksum
-                    hello = ByteBuffer.wrap(new byte[PACKET_SIZE-CHECKSUM_BYTE_LENGTH]);
-                    hello.put(padFileName(filename));
-                    hello.putLong(totalFileSize);
-                    hello.putLong(fileDataSize);
-                    hello.put(fileDataBuffer);
+                    _tempBuffer = ByteBuffer.wrap(new byte[PACKET_SIZE-CHECKSUM_BYTE_LENGTH]);
+                    _tempBuffer.put(padFileName(_filename));
+                    _tempBuffer.putLong(_totalFileSize);
+                    _tempBuffer.putLong(_payloadSize);
+                    _tempBuffer.put(_payloadBufferArray);
 
-                    if (validateData(hello.array(), rcvChecksum))
+                    if (validateData(_tempBuffer.array(), _rcvChecksum))
                         System.out.println("valid");
                     else
                         System.out.println("error");
 
-                    bos.write(fileDataBuffer);
+                    _bos.write(_payloadBufferArray);
 
-                    currFileSize += fileDataSize;
-                    System.out.println(currFileSize + "/" + totalFileSize + "(" + (float)(((float)currFileSize/(float)totalFileSize)*100.0f) + "%)");
+                    _currFileSize += _payloadSize;
+                    printCompletionPercentage(_currFileSize, _totalFileSize);
 
-                    if (currFileSize >= totalFileSize)
-                        isFileTransferDone = true;
+                    if (_currFileSize >= _totalFileSize)
+                        _isFileTransferDone = true;
                 } catch (IOException e) {
                     System.out.println(e.toString());
                 }
@@ -149,7 +149,8 @@ class FileReceiver {
             e.printStackTrace(System.out);
         } finally {
             try {
-                bos.close();
+                if (_bos != null)
+                    _bos.close();
             } catch (IOException e) {
                 System.out.println(e.toString());
             }
