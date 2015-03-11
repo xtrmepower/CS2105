@@ -7,14 +7,6 @@ import java.util.zip.CRC32;
 
 class FileSender {
 
-    private final static int PACKET_SIZE = 1000;
-    private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
-    private final static int TOTAL_FILESIZE_BYTE_LENGTH = 8;  // size of long
-    private final static int PAYLOAD_FILESIZE_BYTE_LENGTH = 8;   // size of long
-    private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
-
-    private final static String HOSTNAME = "localhost";
-
     private DatagramSocket _socket;
     private DatagramPacket _packet;
     private InetAddress _serverAddress;
@@ -25,6 +17,14 @@ class FileSender {
     private int _payloadSize;
     private ByteBuffer _packetBuffer;
     private ByteBuffer _tempBuffer;
+
+    private final static int PACKET_SIZE = 1000;
+    private final static int MAX_FILENAME_LENGTH = 100; // 1 byte per alphabet
+    private final static int TOTAL_FILESIZE_BYTE_LENGTH = 8;  // size of long
+    private final static int PAYLOAD_FILESIZE_BYTE_LENGTH = 8;   // size of long
+    private final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
+
+    private final static String HOSTNAME = "localhost";
 
     public static void main(String[] args) {
 
@@ -57,6 +57,14 @@ class FileSender {
         checksum.update(data);
 
         return checksum.getValue();
+    }
+
+    private void appendPacketBuffer(ByteBuffer buffer, long data) {
+        buffer.putLong(data);
+    }
+
+    private void appendPacketBuffer(ByteBuffer buffer, byte[] data) {
+        buffer.put(data);
     }
 
     public FileSender(String fileToOpen, String host, String port, String rcvFileName) {
@@ -99,6 +107,9 @@ class FileSender {
             _payloadSize = _bis.read(fileDataBuffer);
 
             while (_payloadSize > 0) {
+                //appendPacketBuffer(_packetBpadFileName(rcvFileName));
+                //appendPacketBuffer(_totalFileSize);
+                //appendPacketBuffer(_payloadSize);
                 _tempBuffer.put(padFileName(rcvFileName));   // received file name
                 _tempBuffer.putLong(_totalFileSize);    // total file size
                 _tempBuffer.putLong(_payloadSize);    // payload size (amt of file data)
