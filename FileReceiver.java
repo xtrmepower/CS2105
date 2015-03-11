@@ -47,6 +47,25 @@ class FileReceiver {
         return filename;
     }
 
+    private byte[] padFileName(String rcvFileName) {
+        String paddedName = String.format("%-100s", rcvFileName);
+
+        return paddedName.getBytes();
+    }
+
+    private boolean validateData(byte[] data, long rcvChecksum) {
+        CRC32 checksum = new CRC32();
+
+        checksum.update(data);
+
+        System.out.println("v1="+checksum.getValue()+" v2="+rcvChecksum);
+
+        if (rcvChecksum == checksum.getValue())
+            return true;
+
+        return false;
+    }
+
     public FileReceiver(String localPort) {
         int serverPort = Integer.parseInt(localPort);
 
@@ -70,6 +89,7 @@ class FileReceiver {
         long rcvChecksum = 0;
         String filename = "";
         ByteBuffer buffer;
+        ByteBuffer hello;
 
         try {
             while (!isFileTransferDone) {
@@ -99,13 +119,20 @@ class FileReceiver {
                     totalFileSize = buffer.getLong();
                     fileDataSize = buffer.getLong();
 
-                    /*bos.write(rcvBuffer, MAX_FILENAME_LENGTH +
-                                        TOTAL_FILESIZE_BYTE_LENGTH +
-                                        PAYLOAD_FILESIZE_BYTE_LENGTH,
-                                        (int)fileDataSize);*/
-
                     byte[] fileDataBuffer = new byte[(int)fileDataSize];
                     buffer.get(fileDataBuffer);
+
+                    // perform checksum
+                    hello = ByteBuffer.wrap(new byte[PACKET_SIZE-CHECKSUM_BYTE_LENGTH]);
+                    hello.put(padFileName(filename));
+                    hello.putLong(totalFileSize);
+                    hello.putLong(fileDataSize);
+                    hello.put(fileDataBuffer);
+
+                    if (validateData(hello.array(), rcvChecksum))
+                        System.out.println("valid");
+                    else
+                        System.out.println("error");
 
                     bos.write(fileDataBuffer);
 
