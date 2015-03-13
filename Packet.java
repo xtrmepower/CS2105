@@ -9,6 +9,7 @@ abstract class DataPacket {
     // Packet constants
     protected final static int PACKET_SIZE = 1000;
     protected final static int CHECKSUM_BYTE_LENGTH = 8;  // size of long
+    protected final static int SEQUENCE_NO_BYTE_LENGTH = 8;   // size of long
     protected final static String HOSTNAME = "localhost";
 
     // The packet itself
@@ -219,7 +220,6 @@ class FileHeaderPacket extends DataPacket {
 class PayloadPacket extends DataPacket {
 
     // Packet constants
-    private final static int SEQUENCE_NO_BYTE_LENGTH = 8;   // size of long
     private final static int PAYLOAD_SIZE_BYTE_LENGTH = 8;  // size of long
 
     private long _payloadSize;
@@ -329,13 +329,14 @@ class PayloadPacket extends DataPacket {
         long rcvPayloadSize = bf.getLong();
 
         // Do a quick check to see if the payload size is relatively valid.
-        if (rcvPayloadSize <= 0) {
+        if (rcvPayloadSize <= 0 || rcvPayloadSize > PACKET_SIZE) {
             System.out.println("ERROR: Corrupted Packet!");
 
             return false;
         }
 
         // Extract our payload data.
+        System.out.println("rcvPayloadSize = "+rcvPayloadSize);
         byte[] rcvPayloadData = new byte[(int)rcvPayloadSize];
         bf.get(rcvPayloadData);
 
@@ -371,10 +372,19 @@ class PayloadPacket extends DataPacket {
     }
 };
 
+
+// Contains the response from the receiver.
+//
+// 0 ~ 7:           [CRC32 Checksum]
+// 8 ~ 15:          [SequenceNo]
+// 16 ~ 20:         [Response]
 class ResponsePacket extends DataPacket {
 
     private final static String MSG_ACK = "GET_Y";
     private final static String MSG_NAK = "GET_N";
+
+    private final static int RESPONSE_BYTE_LENGTH = 5;
+
 
     public enum ResponseType {
         NIL,
@@ -384,18 +394,133 @@ class ResponsePacket extends DataPacket {
 
     private ResponseType _responseType;
 
-    public ResponsePacket(int seqNo, ResponseType responseType) {
+    public ResponsePacket(int port, int seqNo, ResponseType responseType) {
         super();
 
+        _port = port;
         _seqNo = seqNo;
         _responseType = responseType;
     }
 
+    public ResponseType getResponseType() {
+        return _responseType;
+    }
+
     protected boolean hasAllData() {
+        if (_seqNo != 0 &&
+            (_responseType == ResponseType.ACK || _responseType == ResponseType.NAK))
+            return true;
+
         return false;
     }
 
+    // Creates a DatagramPacket that contains the response and checksum.
     public DatagramPacket createPacket() {
-        return null;
+
+        //if (!hasAllData())
+        //    return null;
+
+        // Create byte array to store data.
+        byte[] temp = new byte[ SEQUENCE_NO_BYTE_LENGTH +
+                                RESPONSE_BYTE_LENGTH ];
+
+        // Wrap it with a ByteBuffer to facilite operations.
+        ByteBuffer bf = ByteBuffer.wrap(temp);
+
+        // Insert data into the buffer.
+        bf.putLong(_seqNo);
+
+        switch (_responseType) {
+            case ACK: bf.put(MSG_ACK.getBytes()); break;
+            case NAK: bf.put(MSG_NAK.getBytes()); break;
+            default: return null;
+        }
+
+        // Generate the checksum for the data.
+        _checksumObj.update(bf.array());
+        _checksum = _checksumObj.getValue();
+
+        // Create 2nd byte array to store data AND checksum.
+        byte[] temp2 = new byte[ SEQUENCE_NO_BYTE_LENGTH +
+                                 RESPONSE_BYTE_LENGTH +
+                                 CHECKSUM_BYTE_LENGTH ];
+
+        // Wrap it with a ByteBuffer to facilite operations.
+        ByteBuffer bf2 = ByteBuffer.wrap(temp2);
+
+        // Insert checksum and data into buffer.
+        bf2.putLong(_checksum);
+        bf2.put(bf.array());
+
+        _packet = new DatagramPacket(   bf2.array(),
+                                        bf2.array().length,
+                                        _address,
+                                        _port   );
+
+        return _packet;
+    }
+
+    // Parses the data received into its respective format and locations
+    // to ease obtaining information.
+    // Returns true if the data received matches the checksum included (i.e. valid),
+    // false otherwise (i.e. invalid/corrupt).
+    public boolean parsePacket(byte[] data) {
+
+        // Ensure that we have data being passed in.
+        if (data == null) {
+            return false;
+        }
+
+        // Wrap data with ByteBuffer to ease operations.
+        ByteBuffer bf = ByteBuffer.wrap(data);
+
+        long rcvChecksum = bf.getLong();
+        long rcvSeqNo = bf.getLong();
+        String rcvResponseType = extractResponseType(bf);
+
+        // Create byte array to store data to be checksumed.
+        byte[] temp = new byte[ SEQUENCE_NO_BYTE_LENGTH +
+                                RESPONSE_BYTE_LENGTH ];
+
+        // Wrap temp byte array with ByteBuffer to ease operations.
+        ByteBuffer bf2 = ByteBuffer.wrap(temp);
+
+        // Insert received data into ByteBuffer to checksum.
+        bf2.putLong(rcvSeqNo);
+        bf2.put(rcvResponseType.getBytes());
+
+        // Generate the checksum for the received data.
+        _checksumObj.update(bf2.array());
+        _checksum = _checksumObj.getValue();
+
+        // Compare the checksums.
+        if (rcvChecksum != _checksum) {
+            System.out.println("ERROR: Corrupted Packet!");
+
+            return false;
+        }
+
+        // Received data is valid, store them.
+        _seqNo = rcvSeqNo;
+
+        if (rcvResponseType.equals(MSG_ACK))
+            _responseType = ResponseType.ACK;
+        else if (rcvResponseType.equals(MSG_NAK))
+            _responseType = ResponseType.NAK;
+
+        return true;
+    }
+
+    // Helper function: To extract the response.
+    private String extractResponseType(ByteBuffer bb) {
+        String response = "";
+
+        byte[] tempResponse = new byte[RESPONSE_BYTE_LENGTH];
+        bb.get(tempResponse, 0, RESPONSE_BYTE_LENGTH);
+
+        response = new String(tempResponse);
+        response = response.trim();
+
+        return response;
     }
 };

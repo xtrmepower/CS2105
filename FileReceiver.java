@@ -8,7 +8,7 @@ import java.util.zip.CRC32;
 class FileReceiver {
 
     private DatagramSocket _socket;
-    private DatagramPacket _packet;
+    private InetAddress _address;
     private int _port;
 
     public static void main(String[] args) {
@@ -44,21 +44,32 @@ class FileReceiver {
 
         DatagramPacket pkt = new DatagramPacket(fhByteArray, fhByteArray.length);
 
-        // Receive the file header packet.
-        try {
-            _socket.receive(pkt);
-        } catch (IOException e) {
-            System.out.println(e.toString());
-        }
+        boolean fhPacketValid = false;
+        FileHeaderPacket fhPkt = null;
+        do {
+            // Receive the file header packet.
+            try {
+                _socket.receive(pkt);
+            } catch (IOException e) {
+                System.out.println(e.toString());
+            }
 
-        // Parse the packet.
-        FileHeaderPacket fhPkt = new FileHeaderPacket(_port);
-        if (fhPkt.parsePacket(pkt.getData()) == false) {
-            //TODO: Send a NAK.
-            return;
-        } else {
-            //TODO: Send a ACK.
-        }
+            // Parse the packet.
+            fhPkt = new FileHeaderPacket(_port);
+            ResponsePacket rPkt = null;
+            boolean pktValid = fhPkt.parsePacket(pkt.getData());
+            if (pktValid == false) {
+                rPkt = new ResponsePacket(pkt.getPort(), 0, ResponsePacket.ResponseType.NAK);
+            } else {
+                rPkt = new ResponsePacket(pkt.getPort(), 0, ResponsePacket.ResponseType.ACK);
+                fhPacketValid = true;
+            }
+            try {
+                _socket.send(rPkt.createPacket());
+            } catch (IOException e) {
+                System.out.println(e.toString());
+            }
+        } while (!fhPacketValid);
 
         // Extract file header details.
         fileName = fhPkt.getFileName();
@@ -76,19 +87,33 @@ class FileReceiver {
 
         try {
             while (!isFileTransferComplete) {
-                pkt = new DatagramPacket(payloadByteArray, payloadByteArray.length);
 
-                // Receive the payload packets.
-                _socket.receive(pkt);
+                boolean payloadPktReceiveSuccess = false;
+                PayloadPacket payloadPkt = null;
+                do {
+                    pkt = new DatagramPacket(payloadByteArray, payloadByteArray.length);
 
-                // Parse the packet.
-                PayloadPacket payloadPkt = new PayloadPacket(_port, seqNo);
-                if (payloadPkt.parsePacket(pkt.getData()) == false) {
-                    //TODO: Send a NAK.
-                    return;
-                } else {
-                    //TODO: Send a ACK.
-                }
+                    // Receive the payload packets.
+                    _socket.receive(pkt);
+
+                    // Parse the packet.
+                    payloadPkt = new PayloadPacket(_port, seqNo);
+                    ResponsePacket rPkt = null;
+
+                    if (payloadPkt.parsePacket(pkt.getData()) == false) {
+                        rPkt = new ResponsePacket(pkt.getPort(), (int)seqNo, ResponsePacket.ResponseType.NAK);
+                    } else {
+                        rPkt = new ResponsePacket(pkt.getPort(), (int)seqNo, ResponsePacket.ResponseType.ACK);
+                        payloadPktReceiveSuccess = true;
+                    }
+
+                    try {
+                        _socket.send(rPkt.createPacket());
+                    } catch (IOException e) {
+                        System.out.println(e.toString());
+                    }
+                } while (!payloadPktReceiveSuccess);
+
 
                 bos.write(payloadPkt.getPayloadData());
 

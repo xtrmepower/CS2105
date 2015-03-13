@@ -76,26 +76,70 @@ class FileSender {
         pkt = fhPkt.createPacket();
 
         // Send it.
-        try {
-            _socket.send(pkt);
-        } catch (IOException e) {
-            System.out.println(e.toString());
-        }
+        byte[] rPktByteArray = new byte[21];
+        DatagramPacket rPktRaw = new DatagramPacket(rPktByteArray, rPktByteArray.length);
+        boolean fhPacketSendSuccess = false;
+        do {
+            try {
+                _socket.send(pkt);
+
+                // Wait for a reply.
+                _socket.receive(rPktRaw);
+                ResponsePacket rPkt = new ResponsePacket(0, 0, ResponsePacket.ResponseType.NIL);
+                if (rPkt.parsePacket(rPktRaw.getData()) == false) {
+                    // ResponsePacket was corrupted.
+                    //TODO: something
+                } else {
+                    // ResponsePacket was received successfully.
+                    if (rPkt.getResponseType() == ResponsePacket.ResponseType.ACK) {
+                        fhPacketSendSuccess = true;
+                    } else if (rPkt.getResponseType() == ResponsePacket.ResponseType.NAK) {
+                        // Do nothing here. Send again.
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println(e.toString());
+            }
+        } while (!fhPacketSendSuccess);
+
+        // Clean up.
+        rPktRaw = null;
+        rPktByteArray = new byte[21];
 
         PayloadPacket payloadPkt;
         try {
             payloadSize = bis.read(payloadData);
 
             while (payloadSize > 0) {
-                // Create payload packet.
-                payloadPkt = new PayloadPacket(_port, seqNo);
+                boolean payloadPktSendSuccess = false;
+                do {
+                    // Create payload packet.
+                    payloadPkt = new PayloadPacket(_port, seqNo);
 
-                payloadPkt.setPayloadSize(payloadSize);
-                payloadPkt.setPayloadData(payloadData);
+                    payloadPkt.setPayloadSize(payloadSize);
+                    payloadPkt.setPayloadData(payloadData);
 
-                pkt = payloadPkt.createPacket();
+                    pkt = payloadPkt.createPacket();
 
-                _socket.send(pkt);
+                    _socket.send(pkt);
+
+                    // Wait for a reply.
+                    rPktByteArray = new byte[21];
+                    rPktRaw = new DatagramPacket(rPktByteArray, rPktByteArray.length);
+                    _socket.receive(rPktRaw);
+                    ResponsePacket rPkt = new ResponsePacket(0, 0, ResponsePacket.ResponseType.NIL);
+                    if (rPkt.parsePacket(rPktRaw.getData()) == false) {
+                        // ResponsePacket was corrupted.
+                        //TODO: something
+                    } else {
+                        // ResponsePacket was received successfully.
+                        if (rPkt.getResponseType() == ResponsePacket.ResponseType.ACK) {
+                            payloadPktSendSuccess = true;
+                        } else if (rPkt.getResponseType() == ResponsePacket.ResponseType.NAK) {
+                            // Do nothing here. Send again.
+                        }
+                    }
+                } while (!payloadPktSendSuccess);
 
                 // Clean up a little.
                 pkt = null;
