@@ -108,6 +108,13 @@ class FileSender {
 
                 // Increment sequence number.
                 seqNo++;
+                System.out.println("seqNo = " + seqNo);
+
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    System.out.println(e.toString());
+                }
             }
         } catch (IOException e) {
             System.out.println(e.toString());
