@@ -141,6 +141,7 @@ class Sender implements Runnable {
             //TODO: when receive packet from the receiver then stop the send task
 
             if (rcvPkt.verify() && rcvPkt.getSeqNo() == _seqNo) {
+                System.out.println(rcvPkt.getSeqNo());
                 _seqNo++;
                 sendingSuccessful = true;
             }
@@ -167,7 +168,7 @@ class Sender implements Runnable {
             stopSendPacket();
 
             // TODO: Account for lost ACK/NAK
-            if (rcvPkt.verify() && (rcvPkt.getSeqNo() == _seqNo || rcvPkt.getSeqNo() == -1))
+            if (rcvPkt.verify() && rcvPkt.getSeqNo() == -1)
                 terminationSignalSent = true;
         }
     }

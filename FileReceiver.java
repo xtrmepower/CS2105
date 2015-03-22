@@ -28,6 +28,10 @@ class Receiver implements Runnable {
 
     private boolean _done;
 
+// Timer
+    private Timer _sendTimer;
+    private TimerTask _sendTask;
+
 
 // ***************************************************************************
 // Functions
@@ -70,10 +74,8 @@ class Receiver implements Runnable {
                 // Verify that the packet is valid.
                 if (rcvPkt.verify()) {
                     parsePacket(rcvPkt);
-
-                    sendResponsePacket(sendPkt, Packet.MSG_ACK);
                 }
-
+                System.out.println(_seqNo);
                 sendResponsePacket(sendPkt, Packet.MSG_ACK);
             } catch (IOException e) {
                 System.out.println(e.toString());
@@ -81,6 +83,8 @@ class Receiver implements Runnable {
 
             System.out.println(_currFileSize + "/" + _totalFileSize);
         } while (!_done);
+
+        handleLastPacket();
 
         // Need to flush out those last few bytes.
         try {
