@@ -1,17 +1,8 @@
+// Author: Qwek Siew Weng Melvyn (A0111821X)
 import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
-
-/*
- *
- *  change the way that the data is being extracted out of a packet
- *  make it such that only need to extract out the CRC32 checksum
- *  then can do checksum
- *  make every packet uniform (same size?)
- *
- *
- */
 
 class Packet {
 
