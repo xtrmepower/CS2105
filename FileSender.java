@@ -4,8 +4,10 @@ import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.zip.CRC32;
+import java.util.Timer;
+import java.util.TimerTask;
 
-class SenderTask extends TimerTask {
+class SendTask extends TimerTask {
 
 // ***************************************************************************
 // Variables
@@ -22,7 +24,7 @@ class SenderTask extends TimerTask {
 // ***************************************************************************
 
     // Constructor.
-    public SenderTask(DatagramSocket socket, Packet pkt) {
+    public SendTask(DatagramSocket socket, Packet pkt) {
         _socket = socket;
         _pkt = pkt;
     }
@@ -59,6 +61,10 @@ class Sender implements Runnable {
 
     private boolean _done;
 
+// Timer
+    private Timer _sendTimer;
+    private TimerTask _sendTask;
+
 
 // ***************************************************************************
 // Functions
@@ -94,6 +100,7 @@ class Sender implements Runnable {
         }
 
         _seqNo = 0;
+        _sendTimer = new Timer();
     }
 
     // Main update function.
@@ -120,13 +127,18 @@ class Sender implements Runnable {
                 break;
             }
 
-            //System.out.println("seqNo="+_seqNo);
+            System.out.println("seqNo="+_seqNo);
 
-            sendPacket(sendPkt);
+            //sendPacket(sendPkt);
+            startSendPacket(sendPkt);
 
             // Wait for ACK
             rcvPkt = new Packet();
             receivePacket(rcvPkt);
+
+            stopSendPacket();
+
+            //TODO: when receive packet from the receiver then stop the send task
 
             if (rcvPkt.verify() && rcvPkt.getSeqNo() == _seqNo) {
                 _seqNo++;
@@ -147,14 +159,28 @@ class Sender implements Runnable {
         makeTerminationPacket(tPkt);
 
         while (!terminationSignalSent) {
-            sendPacket(tPkt);
+            //sendPacket(tPkt);
+            startSendPacket(tPkt);
 
             rcvPkt = new Packet();
             receivePacket(rcvPkt);
+            stopSendPacket();
 
             // TODO: Account for lost ACK/NAK
-            terminationSignalSent = true;
+            if (rcvPkt.verify() && (rcvPkt.getSeqNo() == _seqNo || rcvPkt.getSeqNo() == -1))
+                terminationSignalSent = true;
         }
+    }
+
+    private void startSendPacket(Packet pkt) {
+        _sendTimer = new Timer();
+        _sendTask = new SendTask(_socket, pkt);
+        _sendTimer.schedule(_sendTask, 0, 50);
+    }
+
+    private void stopSendPacket() {
+        _sendTimer.cancel();
+        _sendTimer = null;
     }
 
     private void makeFileHeaderPacket(Packet pkt) {

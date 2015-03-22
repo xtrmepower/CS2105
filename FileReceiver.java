@@ -79,7 +79,7 @@ class Receiver implements Runnable {
                 System.out.println(e.toString());
             }
 
-            //System.out.println(_currFileSize + "/" + _totalFileSize);
+            System.out.println(_currFileSize + "/" + _totalFileSize);
         } while (!_done);
 
         // Need to flush out those last few bytes.
@@ -91,7 +91,7 @@ class Receiver implements Runnable {
     }
 
     private void parsePacket(Packet pkt) {
-//System.out.println("rcvPkt.getSeqNo()="+pkt.getSeqNo());
+        System.out.println("rcvPkt.getSeqNo()="+pkt.getSeqNo());
         if (pkt.getSeqNo() > _seqNo || pkt.getSeqNo() == -1) {
             if (pkt.getSeqNo() > 0) {
                 updateFile(pkt);
