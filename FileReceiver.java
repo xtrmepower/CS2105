@@ -3,6 +3,9 @@
 import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.util.Timer;
+import java.util.TimerTask;
+
 
 class Receiver implements Runnable {
 
@@ -69,6 +72,7 @@ class Receiver implements Runnable {
             rcvPkt = new Packet();
             try {
                 _socket.receive(rcvPkt.getPacket());
+                stopSendPacket();
 
                 sendPkt = new Packet(_address, rcvPkt.getPacket().getPort());
                 // Verify that the packet is valid.
@@ -76,7 +80,13 @@ class Receiver implements Runnable {
                     parsePacket(rcvPkt);
                 }
                 System.out.println(_seqNo);
-                sendResponsePacket(sendPkt, Packet.MSG_ACK);
+                if (!_done) {
+                    makeResponsePacket(sendPkt, Packet.MSG_ACK);
+                    startSendPacket(sendPkt);
+                } else {
+                    sendResponsePacket(sendPkt, Packet.MSG_ACK);
+                }
+                //sendResponsePacket(sendPkt, Packet.MSG_ACK);
             } catch (IOException e) {
                 System.out.println(e.toString());
             }
@@ -84,14 +94,34 @@ class Receiver implements Runnable {
             System.out.println(_currFileSize + "/" + _totalFileSize);
         } while (!_done);
 
-        handleLastPacket();
-
         // Need to flush out those last few bytes.
         try {
             _bos.close();
         } catch (IOException e) {
             System.out.println(e.toString());
         }
+    }
+
+    private void makeResponsePacket(Packet pkt, short response) {
+
+        pkt.setPacketType(Packet.RESPONSE_PACKET_TYPE);
+        pkt.setResponse(response);
+        pkt.setSeqNo(_seqNo);
+    }
+
+    private void startSendPacket(Packet pkt) {
+        _sendTimer = new Timer();
+        _sendTask = new SendTask(_socket, pkt);
+        _sendTimer.schedule(_sendTask, 0, 50);
+    }
+
+    private void stopSendPacket() {
+        if (_sendTimer == null)
+            return;
+
+        _sendTimer.cancel();
+        _sendTimer = null;
+        _sendTask = null;
     }
 
     private void parsePacket(Packet pkt) {

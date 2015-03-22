@@ -3,7 +3,6 @@
 import java.net.*;
 import java.io.*;
 import java.nio.ByteBuffer;
-import java.util.zip.CRC32;
 import java.util.Timer;
 import java.util.TimerTask;
 
