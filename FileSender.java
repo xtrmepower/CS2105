@@ -91,7 +91,7 @@ class Sender implements Runnable {
             _totalFileSize = _fis.available();
             _fileName = rcvFileName;
 
-            System.out.println("filesize = " + _totalFileSize);
+            //System.out.println("filesize = " + _totalFileSize);
         } catch (FileNotFoundException e) {
             System.out.println(e.toString());
         } catch (IOException e) {
@@ -122,11 +122,11 @@ class Sender implements Runnable {
             }
 
             if (_done) {
-                System.out.println("DONE");
+                //System.out.println("DONE");
                 break;
             }
 
-            System.out.println("seqNo="+_seqNo);
+            //System.out.println("seqNo="+_seqNo);
 
             //sendPacket(sendPkt);
             startSendPacket(sendPkt);
@@ -137,10 +137,8 @@ class Sender implements Runnable {
 
             stopSendPacket();
 
-            //TODO: when receive packet from the receiver then stop the send task
-
             if (rcvPkt.verify() && rcvPkt.getSeqNo() == _seqNo) {
-                System.out.println(rcvPkt.getSeqNo());
+                //System.out.println(rcvPkt.getSeqNo());
                 _seqNo++;
                 sendingSuccessful = true;
             }
@@ -166,7 +164,6 @@ class Sender implements Runnable {
             receivePacket(rcvPkt);
             stopSendPacket();
 
-            // TODO: Account for lost ACK/NAK
             if (rcvPkt.verify() && rcvPkt.getSeqNo() == -1)
                 terminationSignalSent = true;
         }
