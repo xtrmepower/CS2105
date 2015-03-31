@@ -1,4 +1,4 @@
-// Author:
+// Author: Qwek Siew Weng Melvyn (A0111821X)
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -14,15 +14,6 @@ import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
 import java.security.InvalidKeyException;
 import javax.crypto.*;
-/*
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SealedObject;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-*/
 
 /************************************************
   * This skeleton program is prepared for weak  *
@@ -47,6 +38,9 @@ class Alice {  // Alice is a TCP client
     public static final String MESSAGE_FILE = "msgs.txt";
 
     public static void main(String[] args) {
+
+        // To avoid the issues of Mac and Windows return carriage problem.
+        //System.setProperty("line.separator", "\r\n");
 
         // Check if the number of command line argument is 2
         if (args.length != 2) {
@@ -191,8 +185,6 @@ class Alice {  // Alice is a TCP client
             }
 
             System.out.println("SUCCESS: Public key read from file " + PUBLIC_KEY_FILE);
-
-            System.out.println("pubkey = " + this.pubKey.toString());
         }
 
         // Generate a session key
@@ -210,8 +202,6 @@ class Alice {  // Alice is a TCP client
 
             // Set it to be our session key.
             this.sessionKey = kgen.generateKey();
-
-            System.out.println("sessionkey = " + this.sessionKey.toString());
         }
 
         // Seal session key with RSA public key in a SealedObject and return
@@ -285,8 +275,6 @@ class Alice {  // Alice is a TCP client
                     System.out.println("ERROR: Bad padding in message.");
                     return null;
                 }
-
-                System.out.println(plainText);
 
             } catch (NoSuchAlgorithmException e) {
                 System.out.println(e.toString());
